@@ -1,0 +1,92 @@
+/**
+ * build.gradle — Proyecto: playwrightpomlab
+ *
+ * Orquesta la instalación de dependencias Python y la ejecución
+ * de los tests de Playwright con reporte Allure.
+ *
+ * Tareas disponibles:
+ *   gradle installDeps      → instala dependencias de requirements.txt
+ *   gradle installBrowsers  → instala los navegadores de Playwright
+ *   gradle test             → ejecuta los tests y genera allure-results
+ *   gradle allureReport     → genera el reporte HTML de Allure
+ *   gradle allureServe      → abre el reporte en el navegador
+ *   gradle runAll           → instala + tests + reporte (flujo completo)
+ */
+
+plugins {
+    id 'base'
+}
+
+// ── Configuración ─────────────────────────────────────────────────────────────
+def pythonExe   = 'python'
+def pipExe      = 'pip'
+def pytestExe   = 'pytest'
+def allureExe   = 'allure'
+def projectDir  = file('.')
+def resultsDir  = file('allure-results')
+def reportDir   = file('reports/allure-report')
+
+// ── Tarea: instalar dependencias Python ──────────────────────────────────────
+task installDeps(type: Exec) {
+    description = 'Instala las dependencias Python desde requirements.txt'
+    group       = 'Setup'
+    workingDir  = projectDir
+    commandLine pipExe, 'install', '-r', 'requirements.txt'
+}
+
+// ── Tarea: instalar navegadores de Playwright ────────────────────────────────
+task installBrowsers(type: Exec) {
+    description = 'Instala los navegadores de Playwright (Chromium, Firefox, WebKit)'
+    group       = 'Setup'
+    dependsOn   installDeps
+    workingDir  = projectDir
+    commandLine pythonExe, '-m', 'playwright', 'install', 'chromium'
+}
+
+// ── Tarea: ejecutar tests con pytest ─────────────────────────────────────────
+task test(type: Exec) {
+    description = 'Ejecuta los tests BDD con pytest y genera allure-results'
+    group       = 'Verification'
+    dependsOn   installBrowsers
+    workingDir  = projectDir
+    commandLine pytestExe,
+                '--alluredir=allure-results',
+                '--clean-alluredir',
+                '-v'
+    // No falla el build si hay tests fallidos (para poder generar el reporte)
+    ignoreExitValue = true
+}
+
+// ── Tarea: generar reporte Allure ─────────────────────────────────────────────
+task allureReport(type: Exec) {
+    description = 'Genera el reporte HTML de Allure en reports/allure-report'
+    group       = 'Reporting'
+    dependsOn   test
+    workingDir  = projectDir
+    commandLine allureExe, 'generate', 'allure-results',
+                '--output', 'reports/allure-report',
+                '--clean'
+}
+
+// ── Tarea: abrir reporte Allure en el navegador ───────────────────────────────
+task allureServe(type: Exec) {
+    description = 'Abre el reporte Allure en el navegador por defecto'
+    group       = 'Reporting'
+    dependsOn   test
+    workingDir  = projectDir
+    commandLine allureExe, 'serve', 'allure-results'
+}
+
+// ── Tarea: flujo completo ─────────────────────────────────────────────────────
+task runAll {
+    description = 'Flujo completo: instalar dependencias → tests → reporte Allure'
+    group       = 'Workflow'
+    dependsOn   allureReport
+}
+
+// ── Tarea: limpiar resultados ─────────────────────────────────────────────────
+task cleanResults(type: Delete) {
+    description = 'Elimina los directorios allure-results y reports'
+    group       = 'Cleanup'
+    delete resultsDir, reportDir
+}
